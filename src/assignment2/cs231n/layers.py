@@ -119,7 +119,6 @@ def relu_backward(dout, cache):
     ###########################################################################
     return dx
 
-
 def batchnorm_forward(x, gamma, beta, bn_param):
     """
     Forward pass for batch normalization.
@@ -184,14 +183,18 @@ def batchnorm_forward(x, gamma, beta, bn_param):
         # variables.                                                          #
         #######################################################################
         sample_mean = np.mean(x, axis=0) 
-        sample_var = np.var(x, axis=0)
+        x_hat_num = (x - sample_mean)
+        x_hat_num_squared = x_hat_num**2
+        sample_var = np.mean(x_hat_num_squared, axis=0)
+        x_hat_den = np.sqrt(sample_var + eps)
+        x_hat_den_inv = 1.0/x_hat_den
+        x_hat = x_hat_num*x_hat_den_inv
+        x_hat_gamma = gamma*x_hat
+        out = x_hat_gamma + beta
+        cache = (N, D, gamma, beta, eps, sample_mean, x_hat_num, x_hat_num_squared, sample_var, x_hat_den,x_hat_den_inv, x_hat, x_hat_gamma, out)
+        
         running_mean = momentum*running_mean + (1 - momentum)*sample_mean
         running_var = momentum*running_var + (1 - momentum)*sample_var
-        x_hat_num = (x - sample_mean)
-        x_hat_den = np.sqrt(sample_var + eps)
-        x_hat =  x_hat_num/x_hat_den
-        out = gamma*x_hat + beta
-        cache = (N, D, sample_mean, sample_var, out, x_hat_num, x_hat_den, x_hat, gamma, beta)
         #######################################################################
         #                           END OF YOUR CODE                          #
         #######################################################################
@@ -240,15 +243,22 @@ def batchnorm_backward(dout, cache):
     # TODO: Implement the backward pass for batch normalization. Store the    #
     # results in the dx, dgamma, and dbeta variables.                         #
     ###########################################################################
-    N, D, sample_mean, sample_var, out, x_hat_num, x_hat_den, x_hat, gamma, beta = cache
+    N, D, gamma, beta, eps, sample_mean, x_hat_num, x_hat_num_squared, sample_var, x_hat_den,x_hat_den_inv, x_hat, x_hat_gamma, out = cache
+    
     dbeta = np.sum(dout, axis=0)
-    dgamma = np.sum(x_hat*dout, axis=0)
-    dx_hat = dout*gamma
-    dx_hat_den = dx_hat*(-x_hat_num/(x_hat_den**2.0))
-    dx_hat_num = dx_hat*(1.0/x_hat_den)
-    dsample_var = dx_hat_den*(1.0/(2.0*np.sqrt(sample_var)))
-    dsample_mean = dsample_var*()
-    dx = dsample_var*(1.0/N*np.ones((N,D)))
+    dx_hat_gamma = dout
+    dgamma = np.sum(x_hat*dx_hat_gamma, axis=0)
+    dx_hat = dx_hat_gamma*gamma
+    dx_hat_den_inv = np.sum(x_hat_num*dx_hat, axis=0)
+    dx_hat_num_1 = dx_hat*x_hat_den_inv
+    dx_hat_den = dx_hat_den_inv*(-1.0/x_hat_den**2)
+    dsample_var = dx_hat_den*(0.5*(1.0/np.sqrt(sample_var + eps)))
+    dx_hat_num_squared = dsample_var*(1.0/N*np.ones((N,D)))
+    dx_hat_num_2 = 2.0*x_hat_num*dx_hat_num_squared
+    dsample_mean = -1.0*np.sum((dx_hat_num_1+dx_hat_num_2), axis=0)
+    dx_1 = dx_hat_num_1 + dx_hat_num_2
+    dx_2 = dsample_mean*(1.0/N*np.ones((N,D)))
+    dx = dx_1 + dx_2
     
     ###########################################################################
     #                             END OF YOUR CODE                            #
@@ -318,7 +328,8 @@ def dropout_forward(x, dropout_param):
         # TODO: Implement training phase forward pass for inverted dropout.   #
         # Store the dropout mask in the mask variable.                        #
         #######################################################################
-        pass
+        mask = (np.random.rand(*x.shape)<p)/p
+        out = x*mask
         #######################################################################
         #                           END OF YOUR CODE                          #
         #######################################################################
@@ -326,7 +337,7 @@ def dropout_forward(x, dropout_param):
         #######################################################################
         # TODO: Implement the test phase forward pass for inverted dropout.   #
         #######################################################################
-        pass
+        out = x
         #######################################################################
         #                            END OF YOUR CODE                         #
         #######################################################################
@@ -353,7 +364,7 @@ def dropout_backward(dout, cache):
         #######################################################################
         # TODO: Implement training phase backward pass for inverted dropout   #
         #######################################################################
-        pass
+        dx = dout*mask
         #######################################################################
         #                          END OF YOUR CODE                           #
         #######################################################################
