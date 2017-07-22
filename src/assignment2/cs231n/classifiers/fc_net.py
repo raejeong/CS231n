@@ -175,20 +175,24 @@ class FullyConnectedNet(object):
         ############################################################################
         self.params['W1'] = weight_scale*np.random.randn(input_dim,hidden_dims[0])
         self.params['b1'] = np.zeros(hidden_dims[0])
-        self.params['gamma1'] = np.ones(hidden_dims[0])
-        self.params['beta1'] = np.zeros(hidden_dims[0])
+        if self.use_batchnorm:
+            self.params['gamma1'] = np.ones(hidden_dims[0])
+            self.params['beta1'] = np.zeros(hidden_dims[0])
         
         for idx, hidden_dim in enumerate(hidden_dims):
             if idx + 1  == len(hidden_dims):
                 break
             weight_key = 'W%s' % (idx + 2)
             bias_key = 'b%s' % (idx + 2)
-            gamma_key = 'gamma%s' % (idx + 2)
-            beta_key = 'beta%s' % (idx + 2)
+            if self.use_batchnorm:
+                if idx + 1  < len(hidden_dims):
+                    gamma_key = 'gamma%s' % (idx + 2)
+                    beta_key = 'beta%s' % (idx + 2)
             self.params[weight_key] = weight_scale*np.random.randn(hidden_dim,hidden_dims[idx+1])
             self.params[bias_key] = np.zeros(hidden_dims[idx+1])
-            self.params[gamma_key] = np.ones(hidden_dims[idx+1])
-            self.params[beta_key] = np.zeros(hidden_dims[idx+1])
+            if self.use_batchnorm:
+                self.params[gamma_key] = np.ones(hidden_dims[idx+1])
+                self.params[beta_key] = np.zeros(hidden_dims[idx+1])
 
         weight_key = 'W%s' % (len(hidden_dims) + 1)
         bias_key = 'b%s' % (len(hidden_dims) + 1)
@@ -258,16 +262,35 @@ class FullyConnectedNet(object):
             for layer_idx in range(self.num_layers):
                 weight_key = 'W%s' % (layer_idx + 1)
                 bias_key = 'b%s' % (layer_idx + 1)
-                gamma_key = 'gamma%s' % (layer_idx + 1)
-                beta_key = 'beta%s' % (layer_idx + 1)
+                
                 if layer_idx == 0:
+                    gamma_key = 'gamma%s' % (layer_idx + 1)
+                    beta_key = 'beta%s' % (layer_idx + 1)
                     out, cache = affine_batch_relu_forward(X, self.params[weight_key], self.params[bias_key], self.bn_params[layer_idx], self.params[gamma_key], self.params[beta_key])
+                elif layer_idx > self.num_layers-2:
+                    out, cache = affine_relu_forward(outs[-1], self.params[weight_key], self.params[bias_key])
                 else:
-                    import pdb
-                    pdb.set_trace()
+                    gamma_key = 'gamma%s' % (layer_idx + 1)
+                    beta_key = 'beta%s' % (layer_idx + 1)
                     out, cache = affine_batch_relu_forward(outs[-1], self.params[weight_key], self.params[bias_key], self.bn_params[layer_idx], self.params[gamma_key], self.params[beta_key])
                 outs.append(out)
                 caches.append(cache)
+            scores = outs[-1]
+        elif self.use_dropout:
+            for layer_idx in range(self.num_layers-1):
+                weight_key = 'W%s' % (layer_idx + 1)
+                bias_key = 'b%s' % (layer_idx + 1)
+                if layer_idx == 0:
+                    out, cache = deepcopy(affine_relu_dropout_forward(X, self.params[weight_key], self.params[bias_key], self.dropout_param))
+                else:
+                    out, cache = deepcopy(affine_relu_dropout_forward(outs[-1], self.params[weight_key], self.params[bias_key], self.dropout_param))
+                outs.append(out)
+                caches.append(cache)
+            weight_key = 'W%s' % (self.num_layers)
+            bias_key = 'b%s' % (self.num_layers)
+            out, cache = deepcopy(affine_relu_forward(outs[-1], self.params[weight_key], self.params[bias_key]))
+            outs.append(out)
+            caches.append(cache)
             scores = outs[-1]
         else:
             for layer_idx in range(self.num_layers):
@@ -307,17 +330,34 @@ class FullyConnectedNet(object):
         if self.use_batchnorm:
             for layer_idx in reversed(range(self.num_layers)):
                 weight_key = 'W%s' % (layer_idx + 1)
-                bias_key = 'b%s' % (layer_idx + 1)
-                gamma_key = 'gamma%s' % (layer_idx + 1)
-                beta_key = 'beta%s' % (layer_idx + 1)
+                bias_key = 'b%s' % (layer_idx + 1) 
                 if layer_idx == self.num_layers - 1:
-                    dx, grads[weight_key], grads[bias_key], grads[gamma_key], grads[beta_key] = affine_bathc_relu_backward(softmax_dx, caches[layer_idx])
+                    dx, grads[weight_key], grads[bias_key] = affine_relu_backward(softmax_dx, caches[layer_idx])
                     grads[weight_key] += self.reg*self.params[weight_key]
                     loss += 0.5 * self.reg * np.sum(self.params[weight_key]*self.params[weight_key])
                 else:
-                    dx, grads[weight_key], grads[bias_key], grads[gamma_key], grads[beta_key] = affine_bathc_relu_backward(dx, caches[layer_idx])
+                    gamma_key = 'gamma%s' % (layer_idx + 1)
+                    beta_key = 'beta%s' % (layer_idx + 1)
+                    dx, grads[weight_key], grads[bias_key], grads[gamma_key], grads[beta_key] = affine_batch_relu_backward(dx, caches[layer_idx])
                     grads[weight_key] += self.reg*self.params[weight_key]
                     loss += 0.5 * self.reg * np.sum(self.params[weight_key]*self.params[weight_key])
+        elif self.use_dropout:
+            weight_key = 'W%s' % (self.num_layers)
+            bias_key = 'b%s' % (self.num_layers)
+            dx, grads[weight_key], grads[bias_key] = deepcopy(affine_relu_backward(softmax_dx, caches[-1]))
+            grads[weight_key] += self.reg*self.params[weight_key]
+            loss += 0.5 * self.reg * np.sum(self.params[weight_key]*self.params[weight_key])
+            for layer_idx in reversed(range(self.num_layers-1)):
+                weight_key = 'W%s' % (layer_idx + 1)
+                bias_key = 'b%s' % (layer_idx + 1)
+                # if layer_idx == self.num_layers - 1:
+                #     dx, grads[weight_key], grads[bias_key] = affine_relu_dropout_backward(softmax_dx, caches[layer_idx])
+                #     grads[weight_key] += self.reg*self.params[weight_key]
+                #     loss += 0.5 * self.reg * np.sum(self.params[weight_key]*self.params[weight_key])
+                # else:
+                dx, grads[weight_key], grads[bias_key] = deepcopy(affine_relu_dropout_backward(dx, caches[layer_idx]))
+                grads[weight_key] += self.reg*self.params[weight_key]
+                loss += 0.5 * self.reg * np.sum(self.params[weight_key]*self.params[weight_key])
         else:   
             for layer_idx in reversed(range(self.num_layers)):
                 weight_key = 'W%s' % (layer_idx + 1)

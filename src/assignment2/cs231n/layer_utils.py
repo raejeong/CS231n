@@ -2,6 +2,39 @@ pass
 from cs231n.layers import *
 from cs231n.fast_layers import *
 
+def affine_relu_dropout_forward(x, w, b, dropout_params):
+    """
+    Convenience layer that perorms an affine transform followed by a ReLU
+
+    Inputs:
+    - x: Input to the affine layer
+    - w, b: Weights for the affine layer
+
+    Returns a tuple of:
+    - out: Output from the ReLU
+    - cache: Object to give to the backward pass
+    """
+    a, fc_cache = deepcopy(affine_forward(x, w, b))
+    b, relu_cache = deepcopy(relu_forward(a))
+    out, dropout_cache = deepcopy(dropout_forward(b, dropout_params))
+
+    cache = deepcopy((fc_cache, relu_cache, dropout_cache))
+
+
+    return out, cache
+
+
+def affine_relu_dropout_backward(dout, cache):
+    """
+    Backward pass for the affine-relu convenience layer
+    """
+    fc_cache, relu_cache, dropout_cache = deepcopy(cache)
+    ddropout = deepcopy(dropout_backward(dout, dropout_cache))
+
+    drelu = deepcopy(relu_backward(ddropout, relu_cache))
+    dx, dw, db = deepcopy(affine_backward(drelu, fc_cache))
+    return dx, dw, db
+
 def affine_batch_relu_forward(x, w, b, bn_param, gamma, beta):
     """
     Convenience layer that perorms an affine transform followed by a ReLU
@@ -27,7 +60,7 @@ def affine_batch_relu_backward(dout, cache):
     """
     fc_cache, batch_cache, relu_cache = cache
     da = relu_backward(dout, relu_cache)
-    dbatch = batchnorm_backward(da, batch_cache)
+    dbatch, dgamma, dbeta = batchnorm_backward(da, batch_cache)
     dx, dw, db = affine_backward(dbatch, fc_cache)
     return dx, dw, db, dgamma, dbeta
 

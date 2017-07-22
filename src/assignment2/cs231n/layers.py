@@ -1,6 +1,6 @@
 from builtins import range
 import numpy as np
-
+from copy import deepcopy
 
 def affine_forward(x, w, b):
     """
@@ -27,12 +27,12 @@ def affine_forward(x, w, b):
     ###########################################################################
     N = x.shape[0]
     D = w.shape[0]
-    x_reshaped = np.reshape(x,(N,D))
-    out = x_reshaped.dot(w) + b
+    x_reshaped = np.reshape(x,(N,D)).copy()
+    out = (x_reshaped.dot(w) + b).copy()
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
-    cache = (x, w, b)
+    cache = deepcopy((x, w, b))
     return out, cache
 
 
@@ -61,10 +61,10 @@ def affine_backward(dout, cache):
     M = b.shape[0]
     input_shape = x.shape
     x = np.reshape(x,(N,D))
-    dx = np.dot(dout,w.T)
-    dw = np.dot(x.T,dout)
-    db = np.sum(dout, axis=0)
-    dx = np.reshape(dx,input_shape)
+    dx = np.dot(dout,w.T).copy()
+    dw = np.dot(x.T,dout).copy()
+    db = np.sum(dout, axis=0).copy()
+    dx = np.reshape(dx,input_shape).copy()
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -328,7 +328,7 @@ def dropout_forward(x, dropout_param):
         # TODO: Implement training phase forward pass for inverted dropout.   #
         # Store the dropout mask in the mask variable.                        #
         #######################################################################
-        mask = (np.random.rand(*x.shape)<p)/p
+        mask = (np.random.rand(*x.shape)<(1-p))/(1-p)
         out = x*mask
         #######################################################################
         #                           END OF YOUR CODE                          #
