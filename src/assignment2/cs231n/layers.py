@@ -401,7 +401,23 @@ def conv_forward_naive(x, w, b, conv_param):
     # TODO: Implement the convolutional forward pass.                         #
     # Hint: you can use the function np.pad for padding.                      #
     ###########################################################################
-    pass
+    N, C, H, W = x.shape
+    F, C, HH, WW = w.shape
+    stride = conv_param['stride']
+    pad = conv_param['pad']
+    H_prime = int(1 + (H + 2 * pad - HH) / stride)
+    W_prime = int(1 + (W + 2 * pad - WW) / stride)
+    out = np.zeros((N, F, H_prime, W_prime))
+    for example_idx in range(N):
+        current_example = x[example_idx,:,:,:]
+        padded_example = np.lib.pad(current_example,((0,0),(pad,pad),(pad,pad)),'constant',constant_values=(0,0))
+        for filter_idx in range(F):
+            for height_idx in range(H_prime):
+                for width_idx in range(W_prime):
+                    conv_filter = w[filter_idx,:,:,:]
+                    conv_region = padded_example[:,height_idx*stride:height_idx*stride+HH,width_idx*stride:width_idx*stride+WW]
+                    out[example_idx,filter_idx,height_idx,width_idx] = np.sum(conv_region*conv_filter) + b[filter_idx]
+
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -426,7 +442,33 @@ def conv_backward_naive(dout, cache):
     ###########################################################################
     # TODO: Implement the convolutional backward pass.                        #
     ###########################################################################
-    pass
+    x, w, b, conv_param = cache
+    N, C, H, W = x.shape
+    F, C, HH, WW = w.shape
+    stride = conv_param['stride']
+    pad = conv_param['pad']
+    H_prime = int(1 + (H + 2 * pad - HH) / stride)
+    W_prime = int(1 + (W + 2 * pad - WW) / stride)
+    db = np.zeros(F)
+    dw = np.zeros((F,C,HH,WW))
+    dx = np.zeros((N,C,H,W))
+    dsingle_x_padded = np.zeros((C,H+2*pad,W+2*pad))
+    for example_idx in range(N):
+        dsingle_x_padded[:,:,:] = 0.0
+        current_dout = dout[example_idx,:,:,:]
+        current_x = x[example_idx,:,:,:]
+        current_x_padded = np.lib.pad(current_x,((0,0),(pad,pad),(pad,pad)),'constant',constant_values=(0,0))
+        for filter_idx in range(F):
+            db[filter_idx] += np.sum(current_dout[filter_idx,:,:])
+            for height_idx in range(H_prime):
+                for width_idx in range(W_prime):
+                    conv_filter = w[filter_idx,:,:,:]
+                    dsingle_x_padded[:,height_idx*stride:height_idx*stride+HH,width_idx*stride:width_idx*stride+WW] += conv_filter*current_dout[filter_idx,height_idx,width_idx]
+                    dw[filter_idx,:,:,:] += current_x_padded[:,height_idx*stride:height_idx*stride+HH,width_idx*stride:width_idx*stride+WW]*current_dout[filter_idx,height_idx,width_idx]
+        dx[example_idx,:,:,:] = dsingle_x_padded[:,pad:-pad,pad:-pad]
+    
+
+
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -452,7 +494,18 @@ def max_pool_forward_naive(x, pool_param):
     ###########################################################################
     # TODO: Implement the max pooling forward pass                            #
     ###########################################################################
-    pass
+    N, C, H, W = x.shape
+    HH = pool_param['pool_height']
+    WW = pool_param['pool_width']
+    stride = pool_param['stride']
+    H_prime = int(1 + (H - HH) / stride)
+    W_prime = int(1 + (W - WW) / stride)
+    out = np.zeros((N,C,H_prime,W_prime))
+    for example_idx in range(N):
+        for height_idx in range(H_prime):
+            for width_idx in range(W_prime):
+                for depth_idx in range(C):
+                    out[example_idx,depth_idx,height_idx,width_idx] = np.amax(x[example_idx,depth_idx,height_idx*stride:height_idx*stride+HH,width_idx*stride:width_idx*stride+WW])
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -475,7 +528,26 @@ def max_pool_backward_naive(dout, cache):
     ###########################################################################
     # TODO: Implement the max pooling backward pass                           #
     ###########################################################################
-    pass
+    x, pool_param = cache
+    N, C, H, W = x.shape
+    HH = pool_param['pool_height']
+    WW = pool_param['pool_width']
+    stride = pool_param['stride']
+    H_prime = int(1 + (H - HH) / stride)
+    W_prime = int(1 + (W - WW) / stride)
+    out = np.zeros((N,C,H_prime,W_prime))
+    dx = np.zeros(x.shape)
+    for example_idx in range(N):
+        for height_idx in range(H_prime):
+            for width_idx in range(W_prime):
+                for depth_idx in range(C):
+                    
+                    binary_grad_matrix = np.zeros((HH,WW))
+
+                    binary_grad_matrix[np.unravel_index(np.argmax(x[example_idx,depth_idx,height_idx*stride:height_idx*stride+HH,width_idx*stride:width_idx*stride+WW]),binary_grad_matrix.shape)] = 1
+                    
+                    dx[example_idx,depth_idx,height_idx*stride:height_idx*stride+HH,width_idx*stride:width_idx*stride+WW] += binary_grad_matrix.copy()*dout[example_idx,depth_idx,height_idx,width_idx]
+
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
